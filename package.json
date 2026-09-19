@@ -1,0 +1,12 @@
+{
+  "name": "agri-route-root",
+  "version": "1.0.0",
+  "description": "AgriRoute Monorepo",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "seed": "cd server && node scripts/seed.js",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "dev": "node -e \"const { spawn } = require('child_process'); const isWin = process.platform === 'win32'; const npm = isWin ? 'npm.cmd' : 'npm'; const s = spawn(npm, ['run', 'dev'], { cwd: './server', stdio: 'inherit', shell: true }); const c = spawn(npm, ['run', 'dev'], { cwd: './client', stdio: 'inherit', shell: true }); process.on('SIGINT', () => { s.kill(); c.kill(); process.exit(); });\""
+  }
+}
