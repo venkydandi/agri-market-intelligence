@@ -1,115 +1,228 @@
-# 🌾 AgriRoute
+<div align="center">
 
-**AgriRoute** helps farmers find the most profitable nearby market for their crops by ranking markets based on **net return** (price minus transport cost).
+# 🌾 AgriRoute (Agri-Market Intelligence)
+### *Enterprise Agricultural Logistics, Real-Time Mandi Arbitrage & Net-Return Optimizer*
+
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black&style=for-the-badge)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white&style=for-the-badge)](https://vitejs.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-4.19-000000?logo=express&logoColor=white&style=for-the-badge)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white&style=for-the-badge)](https://www.mongodb.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?logo=tailwind-css&logoColor=white&style=for-the-badge)](https://tailwindcss.com/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.186-000000?logo=three.js&logoColor=white&style=for-the-badge)](https://threejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+<p align="center">
+  <b>Eliminating middleman friction and empowering farmers with transparent, data-driven market selection and multi-vehicle freight intelligence.</b>
+</p>
+
+</div>
 
 ---
 
-## 🗂️ Project Structure
+## 📌 Executive Summary
+
+**AgriRoute** is an industrial-grade agricultural intelligence platform built to solve the **price discovery and logistics transparency gap** for farmers across South India (Telangana, Andhra Pradesh, and adjoining agricultural corridors).
+
+Traditional market information systems only report gross market prices without accounting for transportation distances, vehicle capacity constraints, handling fees, or transit perishability. **AgriRoute calculates the true Take-Home Net Return**:
+
+$$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) - \text{Total Freight Cost} - \text{Mandi Handling Fees}$$
+
+---
+
+## 🌟 Key Features
+
+### 1. 🏙️ City-Based Geospatial Intelligence & GPS Geocoding
+- **120+ Indexed Agricultural Hubs**: Fast fuzzy search across Telangana, Andhra Pradesh, Maharashtra, and Karnataka farm clusters.
+- **Smart GPS Reverse-Lookup**: 1-click location detection automatically resolving the nearest agricultural market hub.
+- **Dynamic Search Radius**: Flexible filtering from local micro-markets (50 km) to regional wholesale hubs (500 km).
+
+### 2. 🚛 Multi-Vehicle Fleet Logistics Engine
+- Precision freight calculations tailored to realistic vehicle types:
+  - 🛺 **Auto Rickshaw / 3-Wheeler Cargo**: 500 kg max payload @ ₹6/km
+  - 🛻 **Tata Ace / Small Commercial Pickup**: 1,500 kg max payload @ ₹8/km
+  - 🚚 **Medium Commercial Truck (Eicher)**: 5,000 kg max payload @ ₹14/km
+  - 🚛 **Heavy Multi-Axle Truck**: 15,000 kg max payload @ ₹22/km
+- Automatic multi-trip dispatch optimization: $\lceil \text{Quantity} / \text{Payload} \rceil \times \text{Distance} \times \text{Rate}$.
+
+### 3. 🎨 Awwwards-Caliber UI/UX & Machi-Inspired Aesthetics
+- **Clean Sunny Sky Hero**: High-contrast typography (*"Bold harvest. Better moments."*), rounded pill action buttons, and commercial crop product compositions.
+- **Physics-Based 3D Tilt Cards**: Specular lighting glare and realistic pointer tracking powered by Three.js and custom CSS matrix transforms.
+- **Pastel Bento Grid**: 4 curated produce cards (Warm Latte, Soft Matcha, Warm Peach, Soft Blush).
+- **Massive Lowercase Footer**: Iconic display watermark branding.
+
+### 4. 📈 30-Day Historical Price Trend Analytics
+- High-performance interactive SVG chart comparing daily auction trajectory across top competing APMC mandis.
+- Identifies volatility, seasonal demand spikes, and peak bidding windows.
+
+### 5. 🌦️ Real-Time Transit & Weather Advisory
+- Tailored transit weather alerts for origin districts (monsoon drizzle warnings, tarpaulin recommendations, perishability indices).
+- APMC auction gate timing suggestions (optimal 4:00 AM – 6:30 AM arrival windows).
+
+### 6. 🗣️ Trilingual Localization & WhatsApp Dispatch
+- Native support for **English**, **Telugu (తెలుగు)**, and **Hindi (हिंदी)** with instant in-memory language switching.
+- **1-Click WhatsApp Mandi Slip**: Preformatted summary for drivers and commission agents with direct Google Maps navigation deep links.
+
+---
+
+## 🏛️ System Architecture
 
 ```
-agri-route/
-├── client/          # React + Vite + Tailwind CSS frontend
-├── server/          # Node.js + Express + MongoDB backend
-├── .env.example     # Environment variable template
-└── README.md
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT (React 18 + Vite)                      │
+│                                                                         │
+│   ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────────┐   │
+│   │ 3D Tilt Hero &   │  │ City Geocoder &  │  │ Route Radar & SVG   │   │
+│   │ Machi Bento Grid │  │ GPS Autocomplete │  │ Price Trend Charts  │   │
+│   └─────────┬────────┘  └────────┬─────────┘  └──────────┬──────────┘   │
+│             │                    │                       │              │
+│             └────────────────────┼───────────────────────┘              │
+│                                  │ Axios REST Client                    │
+└──────────────────────────────────┼──────────────────────────────────────┘
+                                   │ HTTP / JSON
+┌──────────────────────────────────┼──────────────────────────────────────┐
+│                                  ▼                                      │
+│                      SERVER (Node.js + Express)                         │
+│                                                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │  Express Routing Layer (/api/compare, /api/markets, /api/crops) │   │
+│   └──────────────────────────────┬──────────────────────────────────┘   │
+│                                  │                                      │
+│   ┌──────────────────────────────┴──────────────────────────────────┐   │
+│   │  Core Services:                                                 │   │
+│   │  • compareService (Vehicle Fleet Cost & Net Margin Ranking)     │   │
+│   │  • haversine (Great-Circle Distance Matrix)                     │   │
+│   │  • seedHelper (16 APMC Mandis + Auto Fallback Data Engine)       │   │
+│   └──────────────────────────────┬──────────────────────────────────┘   │
+└──────────────────────────────────┼──────────────────────────────────────┘
+                                   │ Mongoose ODM / In-Memory Mock
+┌──────────────────────────────────┼──────────────────────────────────────┐
+│                                  ▼                                      │
+│                  DATABASE (MongoDB Atlas / Standalone)                  │
+│       [Users]  •  [Crops]  •  [Markets (16 APMCs)]  •  [PriceRecords]   │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start
+## 📁 Repository Structure
 
-### Prerequisites
-- Node.js v18+
-- A free [MongoDB Atlas](https://cloud.mongodb.com/) M0 cluster
-
-### 1. Clone & Setup Environment
-
-```bash
-git clone <your-repo-url>
-cd agri-route
-cp .env.example server/.env
-# Edit server/.env and fill in your MONGODB_URI and JWT_SECRET
+```
+agri-market-intelligence/
+├── client/                     # Frontend Application (React + Vite)
+│   ├── public/
+│   │   └── images/             # Crop product & hero imagery
+│   ├── src/
+│   │   ├── components/         # Reusable UI & 3D components
+│   │   │   ├── HeroFloatingCrops.jsx  # Hero 3D showcase & pill telemetry
+│   │   │   ├── TiltCard.jsx           # 3D perspective mouse tilt container
+│   │   │   ├── VisualRouteRadar.jsx   # Geospatial radar visualizer
+│   │   │   ├── PriceTrendChart.jsx    # 30-day SVG trend chart
+│   │   │   ├── WeatherAdvisory.jsx    # Real-time transit weather alerts
+│   │   │   ├── Navbar.jsx             # Floating pill navigation
+│   │   │   └── Footer.jsx             # Watermark display footer
+│   │   ├── context/            # Auth & Trilingual Language contexts
+│   │   ├── data/               # 120+ Indian cities & vernacular dictionaries
+│   │   ├── pages/              # Home, Compare, MarketsExplorer, Auth
+│   │   └── services/           # Axios API service client
+│   └── vite.config.js          # Optimized Rollup & Three.js chunk configuration
+│
+├── server/                     # Backend API (Node.js + Express)
+│   ├── models/                 # Mongoose schemas (Crop, Market, PriceRecord, User)
+│   ├── routes/                 # API controllers (auth, crops, markets, compare)
+│   ├── services/               # Arbitrage calculation, routing & seed helpers
+│   ├── db.js                   # Resilient database connection manager
+│   └── index.js                # Express entrypoint with automatic fallback seeding
+│
+├── .env.example                # Configuration template
+└── README.md                   # Enterprise documentation
 ```
 
-### 2. Install & Start the Server
+---
+
+## 🔌 API Reference
+
+### 1. Market Net-Return Arbitrage
+- **`POST /api/compare`**
+  - **Body**: `{ "cropId": "crop_1", "quantity": 1000, "userLat": 17.97, "userLng": 79.59, "quality": "A", "vehicleType": "tata_ace", "maxDistance": 250 }`
+  - **Response**: Array of ranked markets sorted by `netReturn` with complete freight and revenue breakdown.
+
+### 2. Historical Price Trends
+- **`GET /api/markets/trends?cropId=crop_1&quality=A`**
+  - **Response**: 15-day to 30-day chronological auction price history across competing wholesale yards.
+
+### 3. APMC Directory & Search
+- **`GET /api/markets?city=Warangal&district=Warangal`**
+  - **Response**: List of APMC yards with exact GPS coordinates, operating timings, and phone contacts.
+
+### 4. Crop Registry
+- **`GET /api/crops`**
+  - **Response**: Supported crop varieties with baseline modal pricing and quality grading tiers.
+
+---
+
+## ⚡ Quick Start
+
+### 1. Clone & Install Dependencies
 
 ```bash
+# Clone the repository
+git clone https://github.com/venkydandi/agri-market-intelligence.git
+cd agri-market-intelligence
+
+# Install server dependencies
 cd server
 npm install
-node scripts/seed.js    # Seed mock data (run once)
-npm run dev             # Starts on http://localhost:5000
+
+# Install client dependencies
+cd ../client
+npm install
 ```
 
-### 3. Install & Start the Client
+### 2. Environment Configuration
+
+Create a `.env` file in the `server` directory (or use default auto-fallback):
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/agriroute
+JWT_SECRET=your_super_secret_jwt_key_here
+```
+
+> **Note**: If MongoDB is not running locally, the server automatically operates in **In-Memory Seed Mode**, pre-populating all 16 APMC mandis and 10 crop varieties out of the box with zero setup required.
+
+### 3. Run Development Servers
+
+```bash
+# Terminal 1 — Start Backend Server (Port 5000)
+cd server
+npm run dev
+
+# Terminal 2 — Start Frontend Application (Port 5173)
+cd client
+npm run dev
+```
+
+Open [**http://localhost:5173**](http://localhost:5173) in your browser.
+
+---
+
+## 🧪 Production Build & Validation
 
 ```bash
 cd client
-npm install
-npm run dev             # Starts on http://localhost:5173
+npm run build
 ```
-
-Open **http://localhost:5173** in your browser.
-
----
-
-## 🔑 API Endpoints (Phase 1)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/register` | None | Register a new user |
-| POST | `/api/auth/login` | None | Login + get JWT |
-| GET | `/api/auth/me` | JWT | Get current user |
-| GET | `/api/crops` | None | List all crops |
-| GET | `/api/markets` | None | List all markets |
-| POST | `/api/compare` | None | Rank markets by net return |
-
-### Compare Request Body
-```json
-{
-  "cropId": "<crop_id>",
-  "quantity": 500,
-  "quality": "A",
-  "location": { "lat": 17.385, "lng": 78.486 }
-}
-```
-
----
-
-## 🧮 Net Return Algorithm
-
-```
-distance        = haversine(farmer_location, market_location)      [km]
-transport_cost  = distance × ₹8/km × ceil(quantity / 1000)        [₹]
-gross_revenue   = price_per_kg × quantity                          [₹]
-net_return      = gross_revenue − transport_cost                   [₹]
-```
-
-Markets within **150 km** are considered and ranked by **net return (descending)**.
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + Vite |
-| Styling | Tailwind CSS |
-| State/Auth | React Context + JWT |
-| Backend | Node.js + Express |
-| Database | MongoDB Atlas + Mongoose |
-| Authentication | JWT + bcryptjs |
-
----
-
-## 📋 Phase Roadmap
-
-- **Phase 1** ✅ Core MVP (this release)
-- **Phase 2** 🔜 Buyer Module + Enhanced Auth
-- **Phase 3** 🔜 Maps + Charts + Deployment
-- **Phase 4** 🔜 AI/ML + Voice + Telugu Support
+- Fully tree-shaken production bundle with dedicated Three.js vendor chunking (`dist/assets/three-*.js`).
 
 ---
 
 ## 📄 License
 
-MIT
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+---
+
+<div align="center">
+  <b>Built with ❤️ for Indian Farmers & APMC Wholesale Traders</b>
+</div>
