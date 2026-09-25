@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🌾 AgriRoute (Agri-Market Intelligence)
-### *Enterprise Agricultural Logistics, Real-Time Mandi Arbitrage & Net-Return Optimizer*
+### *Agricultural Logistics, Mandi Arbitrage & Net-Return Optimizer*
 
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black&style=for-the-badge)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white&style=for-the-badge)](https://vitejs.dev/)
@@ -22,20 +22,27 @@
 
 ## 📌 Executive Summary
 
-**AgriRoute** is an industrial-grade agricultural intelligence platform built to solve the **price discovery and logistics transparency gap** for farmers across South India (Telangana, Andhra Pradesh, and adjoining agricultural corridors).
+**AgriRoute** is an agricultural logistics intelligence platform built to solve the **price discovery and transport cost gap** for farmers across South India (Telangana, Andhra Pradesh, and adjoining corridors).
 
-Traditional market information systems only report gross market prices without accounting for transportation distances, vehicle capacity constraints, handling fees, or transit perishability. **AgriRoute calculates the true Take-Home Net Return**:
+Traditional market reporting displays gross mandi rates without accounting for road distances, vehicle payload capacities, handling fees, or transit perishability. **AgriRoute calculates the true Take-Home Net Return**:
 
-$$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) - \text{Total Freight Cost} - \text{Mandi Handling Fees}$$
+$$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) - \text{Total Logistics Cost}$$
+
+Where:
+
+$$\text{Trips Required} = \left\lceil \frac{\text{Quantity}}{\text{Vehicle Payload Capacity}} \right\rceil$$
+
+$$\text{Total Logistics Cost} = (\text{Distance} \times \text{Rate/km} \times \text{Trips Required}) + \text{Labor} + \text{Handling}$$
 
 ---
 
 ## 🌟 Key Features
 
-### 1. 🏙️ City-Based Geospatial Intelligence & GPS Geocoding
-- **120+ Indexed Agricultural Hubs**: Fast fuzzy search across Telangana, Andhra Pradesh, Maharashtra, and Karnataka farm clusters.
-- **Smart GPS Reverse-Lookup**: 1-click location detection automatically resolving the nearest agricultural market hub.
-- **Dynamic Search Radius**: Flexible filtering from local micro-markets (50 km) to regional wholesale hubs (500 km).
+### 1. 🏙️ Origin Geocoding & APMC Mandi Index
+- **120+ Origin Cities & Farm Clusters**: Fast autocomplete across Telangana, Andhra Pradesh, Maharashtra, and Karnataka farm centers for origin pinpointing.
+- **Smart GPS Reverse-Lookup**: 1-click location detection automatically resolving the nearest town coordinates.
+- **16 Verified APMC Mandis**: Seeded benchmark market dataset across Telangana and Andhra Pradesh (Bowenpally, Gaddiannaram, Warangal, Nizamabad, Guntur, Kurnool, etc.) with calibrated modal pricing.
+- **Search Radius Control**: Flexible radius filtering (50 km to 500 km) with explicit outside-radius fallback indicators (`withinRequestedRadius: false`).
 
 ### 2. 🚛 Multi-Vehicle Fleet Logistics Engine
 - Precision freight calculations tailored to realistic vehicle types:
@@ -45,18 +52,19 @@ $$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) 
   - 🚛 **Heavy Multi-Axle Truck**: 15,000 kg max payload @ ₹22/km
 - Automatic multi-trip dispatch optimization: $\lceil \text{Quantity} / \text{Payload} \rceil \times \text{Distance} \times \text{Rate}$.
 
-### 3. 🎨 Awwwards-Caliber UI/UX & Machi-Inspired Aesthetics
-- **Clean Sunny Sky Hero**: High-contrast typography (*"Bold harvest. Better moments."*), rounded pill action buttons, and commercial crop product compositions.
-- **Physics-Based 3D Tilt Cards**: Specular lighting glare and realistic pointer tracking powered by Three.js and custom CSS matrix transforms.
+### 3. 🎨 Visual Experience & Responsive UI
+- **Sunny Sky Hero**: High-contrast typography (*"Bold harvest. Better moments."*), rounded pill action buttons, and commercial crop product compositions.
+- **3D Tilt Cards**: Specular lighting glare and realistic pointer tracking powered by Three.js and custom CSS matrix transforms.
 - **Pastel Bento Grid**: 4 curated produce cards (Warm Latte, Soft Matcha, Warm Peach, Soft Blush).
-- **Massive Lowercase Footer**: Iconic display watermark branding.
+- **Display Footer**: Watermark branding.
 
 ### 4. 📈 30-Day Historical Price Trend Analytics
-- High-performance interactive SVG chart comparing daily auction trajectory across top competing APMC mandis.
-- Identifies volatility, seasonal demand spikes, and peak bidding windows.
+- Interactive SVG chart comparing daily auction trajectory across top competing APMC mandis.
+- When MongoDB is active, aggregates actual historical price records; in standalone mode, computes deterministic chronological trends with strict $\text{Grade A} > \text{Grade B} > \text{Grade C}$ guarantees.
 
-### 5. 🌦️ Real-Time Transit & Weather Advisory
-- Tailored transit weather alerts for origin districts (monsoon drizzle warnings, tarpaulin recommendations, perishability indices).
+### 5. 🌦️ Route & Weather Advisory
+- Transit weather guidance for dispatch corridors.
+- Supports live **OpenWeatherMap** API feeds when `WEATHER_API_KEY` is configured; automatically identifies regional estimates (`isDemo: true`) when operating in standalone mode.
 - APMC auction gate timing suggestions (optimal 4:00 AM – 6:30 AM arrival windows).
 
 ### 6. 🗣️ Trilingual Localization & WhatsApp Dispatch
@@ -65,7 +73,7 @@ $$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) 
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ System Architecture & Data Modes
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -77,7 +85,7 @@ $$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) 
 │   └─────────┬────────┘  └────────┬─────────┘  └──────────┬──────────┘   │
 │             │                    │                       │              │
 │             └────────────────────┼───────────────────────┘              │
-│                                  │ Axios REST Client                    │
+│                                  │ Axios REST Client (/api)             │
 └──────────────────────────────────┼──────────────────────────────────────┘
                                    │ HTTP / JSON
 ┌──────────────────────────────────┼──────────────────────────────────────┐
@@ -90,17 +98,26 @@ $$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) 
 │                                  │                                      │
 │   ┌──────────────────────────────┴──────────────────────────────────┐   │
 │   │  Core Services:                                                 │   │
-│   │  • compareService (Vehicle Fleet Cost & Net Margin Ranking)     │   │
+│   │  • calculationEngine (Net Return, Multi-Trip Trips, Rankings)   │   │
+│   │  • compareService (Geospatial Filtering & Dynamic Reasoning)    │   │
+│   │  • weatherService (OpenWeatherMap Live / Deterministic Est.)    │   │
 │   │  • haversine (Great-Circle Distance Matrix)                     │   │
-│   │  • seedHelper (16 APMC Mandis + Auto Fallback Data Engine)       │   │
+│   │  • seedHelper (16 APMC Mandis & Deterministic Price Data)       │   │
 │   └──────────────────────────────┬──────────────────────────────────┘   │
 └──────────────────────────────────┼──────────────────────────────────────┘
-                                   │ Mongoose ODM / In-Memory Mock
-┌──────────────────────────────────┼──────────────────────────────────────┐
-│                                  ▼                                      │
-│                  DATABASE (MongoDB Atlas / Standalone)                  │
-│       [Users]  •  [Crops]  •  [Markets (16 APMCs)]  •  [PriceRecords]   │
-└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+          ┌─────────────────────────────────────────────────┐
+          │               DATA RESOLUTION MODES             │
+          │                                                 │
+          │  1. Standalone In-Memory Mode (Zero-Config):    │
+          │     Seeded 16 APMC mandis, 10 crops, and        │
+          │     deterministic calibrated rates (Demo).      │
+          │                                                 │
+          │  2. Database Mode (MongoDB Atlas / Local):      │
+          │     Connects via MONGODB_URI and queries        │
+          │     persisted PriceRecord & Market collections. │
+          └─────────────────────────────────────────────────┘
 ```
 
 ---
@@ -110,32 +127,39 @@ $$\text{Net Return} = (\text{Mandi Wholesale Rate} \times \text{Crop Quantity}) 
 ```
 agri-market-intelligence/
 ├── client/                     # Frontend Application (React + Vite)
-│   ├── public/
-│   │   └── images/             # Crop product & hero imagery
 │   ├── src/
 │   │   ├── components/         # Reusable UI & 3D components
-│   │   │   ├── HeroFloatingCrops.jsx  # Hero 3D showcase & pill telemetry
 │   │   │   ├── TiltCard.jsx           # 3D perspective mouse tilt container
 │   │   │   ├── VisualRouteRadar.jsx   # Geospatial radar visualizer
 │   │   │   ├── PriceTrendChart.jsx    # 30-day SVG trend chart
-│   │   │   ├── WeatherAdvisory.jsx    # Real-time transit weather alerts
-│   │   │   ├── Navbar.jsx             # Floating pill navigation
-│   │   │   └── Footer.jsx             # Watermark display footer
-│   │   ├── context/            # Auth & Trilingual Language contexts
-│   │   ├── data/               # 120+ Indian cities & vernacular dictionaries
+│   │   │   ├── WeatherAdvisory.jsx    # Transit weather alerts (Live / Demo)
+│   │   │   ├── CompareTable.jsx       # Sortable comparative breakdown table
+│   │   │   └── MarketCard.jsx         # Recommendation card with reasoning
+│   │   ├── context/            # Auth & Language contexts
+│   │   ├── data/               # 120+ Indian origin cities & dictionaries
 │   │   ├── pages/              # Home, Compare, MarketsExplorer, Auth
-│   │   └── services/           # Axios API service client
-│   └── vite.config.js          # Optimized Rollup & Three.js chunk configuration
+│   │   └── services/           # Axios API client
+│   └── vite.config.js          # Vite configuration with /api proxy
 │
 ├── server/                     # Backend API (Node.js + Express)
 │   ├── models/                 # Mongoose schemas (Crop, Market, PriceRecord, User)
-│   ├── routes/                 # API controllers (auth, crops, markets, compare)
-│   ├── services/               # Arbitrage calculation, routing & seed helpers
-│   ├── db.js                   # Resilient database connection manager
-│   └── index.js                # Express entrypoint with automatic fallback seeding
+│   ├── routes/                 # Express routers (compare, markets, crops, weather, auth)
+│   ├── services/
+│   │   ├── calculationEngine.js # Centralized logistics math & ranking comparator
+│   │   ├── compareService.js    # Market comparison & dynamic reasoning
+│   │   ├── weatherService.js    # Weather integration & regional fallback
+│   │   ├── haversine.js         # Great-circle distance calculations
+│   │   └── seedHelper.js        # APMC mandis & deterministic historical prices
+│   ├── tests/
+│   │   └── recommendation.test.js # Test suite for recommendation engine
+│   ├── db.js                   # Database connection manager with fallback
+│   └── index.js                # Express application entrypoint
 │
-├── .env.example                # Configuration template
-└── README.md                   # Enterprise documentation
+├── .github/
+│   └── workflows/
+│       └── webpack.yml         # GitHub Actions CI workflow (Node 18.x, 20.x, 22.x)
+├── .env.example                # Environment variables template
+└── README.md                   # Project documentation
 ```
 
 ---
@@ -144,26 +168,40 @@ agri-market-intelligence/
 
 ### 1. Market Net-Return Arbitrage
 - **`POST /api/compare`**
-  - **Body**: `{ "cropId": "crop_1", "quantity": 1000, "userLat": 17.97, "userLng": 79.59, "quality": "A", "vehicleType": "tata_ace", "maxDistance": 250 }`
-  - **Response**: Array of ranked markets sorted by `netReturn` with complete freight and revenue breakdown.
+  - **Body**:
+    ```json
+    {
+      "cropId": "crop_1",
+      "quantity": 1000,
+      "quality": "A",
+      "location": { "lat": 17.9785, "lng": 79.5941 },
+      "radiusKm": 250,
+      "vehicleType": "small_pickup"
+    }
+    ```
+  - **Response**: Array of candidate mandis sorted strictly by `netReturn` with multi-trip calculations, logistics breakdown, and dynamic structured reasoning (`recommendationReason`).
 
 ### 2. Historical Price Trends
 - **`GET /api/markets/trends?cropId=crop_1&quality=A`**
-  - **Response**: 15-day to 30-day chronological auction price history across competing wholesale yards.
+  - **Response**: 30-day chronological auction price history across competing wholesale yards.
 
-### 3. APMC Directory & Search
-- **`GET /api/markets?city=Warangal&district=Warangal`**
-  - **Response**: List of APMC yards with exact GPS coordinates, operating timings, and phone contacts.
+### 3. Route Weather & Advisory
+- **`GET /api/weather?city=Warangal`**
+  - **Response**: Current weather and dispatch recommendations (`isDemo: false` when API key configured, otherwise `isDemo: true`).
 
-### 4. Crop Registry
+### 4. APMC Mandi Directory
+- **`GET /api/markets`**
+  - **Response**: List of 16 APMC yards with GPS coordinates, operating timings, and phone contacts.
+
+### 5. Crop Registry
 - **`GET /api/crops`**
-  - **Response**: Supported crop varieties with baseline modal pricing and quality grading tiers.
+  - **Response**: Supported crop varieties with categories and unit metadata.
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Clone & Install Dependencies
+### 1. Install Dependencies
 
 ```bash
 # Clone the repository
@@ -171,58 +209,61 @@ git clone https://github.com/venkydandi/agri-market-intelligence.git
 cd agri-market-intelligence
 
 # Install server dependencies
-cd server
-npm install
+npm --prefix server install
 
 # Install client dependencies
-cd ../client
-npm install
+npm --prefix client install
 ```
 
 ### 2. Environment Configuration
 
-Create a `.env` file in the `server` directory (or use default auto-fallback):
+Copy `.env.example` to `.env` in the root and/or `server` directory:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/agriroute
+MONGODB_URI=mongodb://localhost:27017/agri-route
 JWT_SECRET=your_super_secret_jwt_key_here
+CLIENT_URL=http://localhost:5173
+WEATHER_API_KEY=
 ```
 
-> **Note**: If MongoDB is not running locally, the server automatically operates in **In-Memory Seed Mode**, pre-populating all 16 APMC mandis and 10 crop varieties out of the box with zero setup required.
+> **Note**: If MongoDB is not running locally, the server automatically operates in **Standalone In-Memory Mode** using verified APMC mandis and calibrated benchmark price data.
 
 ### 3. Run Development Servers
 
 ```bash
-# Terminal 1 — Start Backend Server (Port 5000)
-cd server
+# Run both backend and frontend concurrently from root:
 npm run dev
 
-# Terminal 2 — Start Frontend Application (Port 5173)
-cd client
-npm run dev
+# Or run independently:
+npm --prefix server run dev   # Express API on http://localhost:5000
+npm --prefix client run dev   # Vite frontend on http://localhost:5173
 ```
 
 Open [**http://localhost:5173**](http://localhost:5173) in your browser.
 
 ---
 
-## 🧪 Production Build & Validation
+## 🧪 Testing & Production Build
 
+### Run Backend Unit & Financial Engine Tests
 ```bash
-cd client
-npm run build
+npm --prefix server test
 ```
-- Fully tree-shaken production bundle with dedicated Three.js vendor chunking (`dist/assets/three-*.js`).
+Executes the test suite covering multi-trip dispatch math, net return ranking, deterministic tie-breaking, quality multipliers, and candidate validation.
+
+### Build Frontend Production Bundle
+```bash
+npm --prefix client run build
+```
+Generates production assets in `client/dist/`.
 
 ---
 
 ## 📄 License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
-<div align="center">
-  <b>Built with ❤️ for Indian Farmers & APMC Wholesale Traders</b>
-</div>

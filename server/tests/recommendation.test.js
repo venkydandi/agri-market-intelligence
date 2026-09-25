@@ -282,4 +282,66 @@ describe('AgriRoute Recommendation & Calculation Engine Tests', () => {
     assert.ok(response.results[0].netReturnPerQuintal > 0, 'netReturnPerQuintal must be calculated');
     assert.equal(response.metadata.cropName, 'Tomato');
   });
+
+  // Test Case 11: Geolocation coordinate handling and Haversine ordering
+  test('Test Case 11: Coordinates are verified with [lng, lat] GeoJSON and (lat, lng) Haversine order', () => {
+    const { haversineDistance } = require('../services/haversine');
+    const { MARKETS } = require('../services/seedHelper');
+
+    // Warangal Enumamula: lat 17.9785, lng 79.5941 -> coordinates: [79.5941, 17.9785]
+    const warangal = MARKETS.find((m) => m.name.includes('Warangal'));
+    assert.ok(warangal, 'Warangal APMC must exist');
+    assert.equal(warangal.location.coordinates[0], 79.5941, 'First element of GeoJSON coordinates must be Longitude');
+    assert.equal(warangal.location.coordinates[1], 17.9785, 'Second element of GeoJSON coordinates must be Latitude');
+
+    // Bowenpally Market: lat 17.4739, lng 78.4867
+    const bowenpally = MARKETS.find((m) => m.name.includes('Bowenpally'));
+    const distKm = haversineDistance(
+      warangal.location.coordinates[1],
+      warangal.location.coordinates[0],
+      bowenpally.location.coordinates[1],
+      bowenpally.location.coordinates[0]
+    );
+
+    // Approximate distance Warangal to Secunderabad is ~130-140 km
+    assert.ok(distKm > 120 && distKm < 155, `Warangal to Bowenpally distance should be ~130-145 km, got ${distKm.toFixed(1)} km`);
+  });
+
+  // Test Case 12: Radius filtering and outside-radius fallback metadata
+  test('Test Case 12: Search radius filters correctly and sets withinRequestedRadius: false on fallback', () => {
+    // 1. From Warangal with a 50 km radius: should find Warangal APMC
+    const tightRadiusResp = compareInMemory({
+      cropId: 'crop_1',
+      quantity: 1000,
+      quality: 'A',
+      lat: 17.9785,
+      lng: 79.5941,
+      radiusKm: 50,
+      vehicleType: 'small_pickup',
+    });
+
+    assert.ok(tightRadiusResp.results.length > 0, 'Should find at least 1 market in 50 km radius');
+    assert.equal(tightRadiusResp.metadata.withinRequestedRadius, true, 'Metadata withinRequestedRadius must be true');
+    tightRadiusResp.results.forEach((r) => {
+      assert.ok(r.distanceKm <= 50, `All returned markets must be <= 50 km, found ${r.distanceKm} km`);
+      assert.equal(r.withinRequestedRadius, true);
+    });
+
+    // 2. From New Delhi (far from AP/Telangana) with 50 km radius: triggers fallback with withinRequestedRadius: false
+    const distantLocationResp = compareInMemory({
+      cropId: 'crop_1',
+      quantity: 1000,
+      quality: 'A',
+      lat: 28.6139,
+      lng: 77.2090,
+      radiusKm: 50,
+      vehicleType: 'small_pickup',
+    });
+
+    assert.ok(distantLocationResp.results.length > 0, 'Should return fallback nearest markets');
+    assert.equal(distantLocationResp.metadata.withinRequestedRadius, false, 'Metadata withinRequestedRadius must be false for fallback');
+    distantLocationResp.results.forEach((r) => {
+      assert.equal(r.withinRequestedRadius, false, 'Fallback results must have withinRequestedRadius: false');
+    });
+  });
 });

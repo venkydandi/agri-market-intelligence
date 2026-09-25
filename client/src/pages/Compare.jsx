@@ -507,6 +507,16 @@ export default function Compare() {
             cropName={selectedCrop.name}
           />
 
+          {/* Outside Radius Advisory */}
+          {results.metadata?.withinRequestedRadius === false && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-2.5 text-xs text-amber-900 shadow-sm">
+              <Info className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>
+                No mandis found within <strong>{form.radiusKm} km</strong>. Displaying nearest regional APMC yards outside requested radius.
+              </span>
+            </div>
+          )}
+
           {/* Quality Grade Arbitrage Alert */}
           {gradeArbitrageGain && gradeArbitrageGain > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs shadow-sm">
