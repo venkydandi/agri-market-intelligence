@@ -82,7 +82,14 @@ export default function MarketCard({ result, originLocation = { lat: 17.385, lng
               {formatCurrency(pricePerKg)}
               <span className="text-xs font-normal text-gray-500"> / kg</span>
             </div>
-            <div className="text-xs font-semibold text-emerald-600">Grade {quality} Rate</div>
+            <div className="text-xs font-semibold text-emerald-600 flex items-center justify-start sm:justify-end gap-1.5">
+              <span>Grade {quality} Rate</span>
+              {result.isDemoData && (
+                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                  Demo
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -137,6 +144,19 @@ export default function MarketCard({ result, originLocation = { lat: 17.385, lng
             {formatCurrency(netReturn)}
           </div>
         </div>
+
+        {/* Dynamic Recommendation Reasoning */}
+        {result.recommendationReason?.primary && (
+          <div className="bg-gray-50/90 border border-gray-100/90 rounded-xl p-3 mb-4 text-xs text-gray-600 space-y-1">
+            <div className="font-bold text-gray-800 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              <span>{result.recommendationReason.primary}</span>
+            </div>
+            {result.recommendationReason.priceAdvantage && (
+              <p className="text-[11px] text-gray-500">{result.recommendationReason.priceAdvantage}</p>
+            )}
+          </div>
+        )}
 
         {/* Mandi Timings, Contact & Action Buttons */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-gray-500 pt-1">

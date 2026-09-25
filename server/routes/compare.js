@@ -25,35 +25,61 @@ router.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({
+        message: errors.array().map((e) => e.msg).join(', '),
+        errors: errors.array(),
+      });
     }
 
-    const { cropId, quantity, quality, location, radiusKm, vehicleType, costPerKm, laborCostPerTrip } = req.body;
+    const {
+      cropId,
+      quantity,
+      quality,
+      location,
+      radiusKm,
+      vehicleType,
+      costPerKm,
+      laborCostPerTrip,
+      loadingCostPerTrip,
+      unloadingCostPerTrip,
+      tollCostPerTrip,
+      otherCost,
+    } = req.body;
 
     try {
-      const results = await compareMarkets({
+      const comparison = await compareMarkets({
         cropId,
         quantity: Number(quantity),
         quality,
-        lat: location.lat,
-        lng: location.lng,
+        lat: Number(location.lat),
+        lng: Number(location.lng),
         radiusKm: radiusKm ? Number(radiusKm) : 250,
         vehicleType: vehicleType || 'small_pickup',
-        customRatePerKm: costPerKm ? Number(costPerKm) : undefined,
+        customRatePerKm: costPerKm !== undefined ? Number(costPerKm) : undefined,
         laborCostPerTrip: laborCostPerTrip ? Number(laborCostPerTrip) : 0,
+        loadingCostPerTrip: loadingCostPerTrip ? Number(loadingCostPerTrip) : 0,
+        unloadingCostPerTrip: unloadingCostPerTrip ? Number(unloadingCostPerTrip) : 0,
+        tollCostPerTrip: tollCostPerTrip ? Number(tollCostPerTrip) : 0,
+        otherCost: otherCost ? Number(otherCost) : 0,
       });
 
-      if (results.length === 0) {
+      if (!comparison.results || comparison.results.length === 0) {
         return res.json({
-          message: 'No markets found with price data for this crop within the search radius.',
+          message: 'No markets found with valid price data for this crop within search criteria.',
           results: [],
+          total: 0,
+          metadata: comparison.metadata || {},
         });
       }
 
-      res.json({ results, total: results.length });
+      res.json({
+        results: comparison.results,
+        total: comparison.total,
+        metadata: comparison.metadata,
+      });
     } catch (err) {
       console.error('Compare error:', err);
-      res.status(500).json({ message: 'Server error during comparison' });
+      res.status(500).json({ message: err.message || 'Server error during comparison' });
     }
   }
 );

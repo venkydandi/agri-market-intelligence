@@ -2,7 +2,7 @@ const express = require('express');
 const Market = require('../models/Market');
 const PriceRecord = require('../models/PriceRecord');
 const Crop = require('../models/Crop');
-const { MARKETS, CROPS, BASE_PRICES, QUALITY_MULTIPLIERS } = require('../services/seedHelper');
+const { MARKETS, CROPS, BASE_PRICES, QUALITY_MULTIPLIERS, getDeterministicHistoricalPrice } = require('../services/seedHelper');
 const { isConnected } = require('../db');
 
 const router = express.Router();
@@ -16,9 +16,12 @@ const fallbackMarkets = MARKETS.map((m, i) => ({
 // Returns 30-day historical prices for top markets for a selected crop
 router.get('/trends', async (req, res) => {
   const { cropId, quality = 'A' } = req.query;
+  const validQuality = ['A', 'B', 'C'].includes(quality) ? quality : 'A';
 
-  // Resolve crop name
+  // 1. Resolve crop
   let cropName = 'Tomato';
+  let cropObjectId = null;
+
   if (cropId && cropId.startsWith('crop_')) {
     const idx = parseInt(cropId.replace('crop_', ''), 10) - 1;
     if (CROPS[idx]) cropName = CROPS[idx].name;
@@ -27,28 +30,105 @@ router.get('/trends', async (req, res) => {
     if (matched) cropName = matched.name;
   }
 
-  const basePriceList = BASE_PRICES[cropName] || BASE_PRICES.Tomato;
-  const multiplier = (QUALITY_MULTIPLIERS && QUALITY_MULTIPLIERS[quality]) || 1.0;
+  // 2. If DB is connected, fetch genuine PriceRecords
+  if (isConnected()) {
+    try {
+      let cropDoc = null;
+      if (cropId && require('mongoose').Types.ObjectId.isValid(cropId)) {
+        cropDoc = await Crop.findById(cropId);
+      } else {
+        cropDoc = await Crop.findOne({ name: cropName });
+      }
 
-  // Pick top 4 representative markets
+      if (cropDoc) {
+        cropObjectId = cropDoc._id;
+        cropName = cropDoc.name;
+      }
+
+      const activeMarkets = await Market.find({ isActive: true }).limit(4);
+      if (activeMarkets.length > 0 && cropObjectId) {
+        const marketIds = activeMarkets.map((m) => m._id);
+        const marketMap = {};
+        activeMarkets.forEach((m) => {
+          marketMap[m._id.toString()] = m.name;
+        });
+
+        const now = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 31);
+
+        const records = await PriceRecord.find({
+          crop: cropObjectId,
+          market: { $in: marketIds },
+          quality: validQuality,
+          date: { $gte: thirtyDaysAgo, $lte: now },
+        })
+          .sort({ date: 1 })
+          .lean();
+
+        if (records.length > 0) {
+          // Group records by calendar day
+          const dayMap = new Map();
+
+          records.forEach((rec) => {
+            const d = new Date(rec.date);
+            const dateKey = d.toISOString().split('T')[0];
+            const dateLabel = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+
+            if (!dayMap.has(dateKey)) {
+              dayMap.set(dateKey, {
+                date: dateLabel,
+                timestamp: rec.date.toISOString ? rec.date.toISOString() : new Date(rec.date).toISOString(),
+                _dateObj: d,
+              });
+            }
+
+            const dayObj = dayMap.get(dateKey);
+            const mName = marketMap[rec.market.toString()];
+            if (mName && dayObj[mName] === undefined) {
+              dayObj[mName] = rec.pricePerUnit;
+            }
+          });
+
+          // Sort chronologically ascending
+          const sortedTrends = Array.from(dayMap.values())
+            .sort((a, b) => a._dateObj - b._dateObj)
+            .map(({ _dateObj, ...rest }) => rest);
+
+          const isDemoData = records.some((r) => r.isDemoData || r.source === 'seed');
+
+          return res.json({
+            crop: cropName,
+            quality: validQuality,
+            markets: activeMarkets.map((m) => m.name),
+            trends: sortedTrends,
+            isDemoData,
+            source: isDemoData ? 'seed' : 'api',
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Trends DB query error, falling back to deterministic engine:', err.message);
+    }
+  }
+
+  // 3. Deterministic In-Memory Historical Engine (Standalone fallback)
+  // Pick top 4 representative APMC mandis
   const targetMarkets = fallbackMarkets.slice(0, 4);
-
-  // Generate 15 intervals of historical trend points over the last 30 days
   const trendPoints = [];
   const now = new Date();
 
+  // Generate 15 intervals (every 2 days over last 30 days)
   for (let i = 14; i >= 0; i--) {
+    const dayOffset = i * 2;
     const date = new Date(now);
-    date.setDate(date.getDate() - i * 2);
+    date.setDate(date.getDate() - dayOffset);
+    date.setHours(6, 0, 0, 0); // APMC morning auction time
     const dateLabel = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 
     const marketPrices = {};
     targetMarkets.forEach((m, idx) => {
-      const base = basePriceList[idx] || 20;
-      // Realistic sinusoidal fluctuation over time
-      const wave = Math.sin((14 - i) * 0.4 + idx) * 2.5;
-      const price = Math.round((base * multiplier + wave) * 10) / 10;
-      marketPrices[m.name] = Math.max(5, price);
+      marketPrices[m.name] = getDeterministicHistoricalPrice(cropName, idx, validQuality, dayOffset);
     });
 
     trendPoints.push({
@@ -60,9 +140,11 @@ router.get('/trends', async (req, res) => {
 
   res.json({
     crop: cropName,
-    quality,
+    quality: validQuality,
     markets: targetMarkets.map((m) => m.name),
     trends: trendPoints,
+    isDemoData: true,
+    source: 'seed',
   });
 });
 
@@ -132,4 +214,3 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

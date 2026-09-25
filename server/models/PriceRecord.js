@@ -31,6 +31,10 @@ const PriceRecordSchema = new mongoose.Schema(
       enum: ['api', 'manual', 'seed'],
       default: 'manual',
     },
+    isDemoData: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

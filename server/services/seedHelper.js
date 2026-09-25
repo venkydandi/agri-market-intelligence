@@ -175,10 +175,29 @@ const BASE_PRICES = {
   Cotton:   [62, 64, 58, 60, 56, 59, 61, 55, 57, 58, 60, 56, 68, 65, 59, 66],
 };
 
-const QUALITY_MULTIPLIERS = { A: 1.0, B: 0.85, C: 0.70 };
+const QUALITY_MULTIPLIERS = { A: 1.00, B: 0.85, C: 0.70 };
 
-function randomVariation(base) {
-  return Math.round(base * (0.92 + Math.random() * 0.16) * 100) / 100;
+/**
+ * Deterministic historical price calculator:
+ * Guarantees:
+ * - Grade A > Grade B > Grade C strictly
+ * - No negative prices
+ * - Consistent sinusoidal daily variation across past dates
+ * - Completely reproducible output
+ */
+function getDeterministicHistoricalPrice(cropName, marketIdx, quality = 'A', dayOffset = 0) {
+  const basePrices = BASE_PRICES[cropName] || BASE_PRICES.Tomato;
+  const basePrice = basePrices[marketIdx % basePrices.length] || 20;
+
+  // Predictable, realistic seasonal cycle: +/- 8% amplitude
+  const cycle = Math.sin(dayOffset * 0.28 + marketIdx * 0.42);
+  const adjustedBase = basePrice * (1 + cycle * 0.08);
+
+  const multiplier = QUALITY_MULTIPLIERS[quality] || 1.0;
+  const rawPrice = adjustedBase * multiplier;
+
+  // Round to 1 decimal place, minimum price ₹3/kg
+  return Math.max(3.0, Math.round(rawPrice * 10) / 10);
 }
 
 async function autoSeedDatabase(Crop, Market, PriceRecord) {
@@ -200,24 +219,23 @@ async function autoSeedDatabase(Crop, Market, PriceRecord) {
   const now = new Date();
 
   for (let day = 0; day < 30; day++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - day);
+    const recordDate = new Date(now);
+    recordDate.setDate(recordDate.getDate() - day);
+    recordDate.setHours(6, 0, 0, 0); // 6:00 AM auction opening
 
     marketDocs.forEach((market, mIdx) => {
       cropDocs.forEach((crop) => {
-        const basePrices = BASE_PRICES[crop.name];
-        if (!basePrices) return;
-        const basePrice = basePrices[mIdx] || basePrices[0];
-
         ['A', 'B', 'C'].forEach((quality) => {
-          const price = randomVariation(basePrice * QUALITY_MULTIPLIERS[quality]);
+          const price = getDeterministicHistoricalPrice(crop.name, mIdx, quality, day);
+
           priceRecords.push({
             market: market._id,
             crop: crop._id,
             pricePerUnit: price,
             quality,
-            date,
+            date: recordDate,
             source: 'seed',
+            isDemoData: true,
           });
         });
       });
@@ -231,5 +249,11 @@ async function autoSeedDatabase(Crop, Market, PriceRecord) {
   console.log(`✅ Auto-seed complete: ${cropDocs.length} crops, ${marketDocs.length} markets, ${priceRecords.length} prices.`);
 }
 
-module.exports = { autoSeedDatabase, CROPS, MARKETS, BASE_PRICES, QUALITY_MULTIPLIERS };
-
+module.exports = {
+  autoSeedDatabase,
+  CROPS,
+  MARKETS,
+  BASE_PRICES,
+  QUALITY_MULTIPLIERS,
+  getDeterministicHistoricalPrice,
+};

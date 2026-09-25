@@ -7,12 +7,13 @@ const authRoutes = require('./routes/auth');
 const compareRoutes = require('./routes/compare');
 const cropRoutes = require('./routes/crops');
 const marketRoutes = require('./routes/markets');
+const weatherRoutes = require('./routes/weather');
 
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: true,
   credentials: true,
 }));
 app.use(express.json());
@@ -31,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/compare', compareRoutes);
 app.use('/api/crops', cropRoutes);
 app.use('/api/markets', marketRoutes);
+app.use('/api/weather', weatherRoutes);
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

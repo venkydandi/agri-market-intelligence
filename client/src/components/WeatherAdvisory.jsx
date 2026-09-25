@@ -1,16 +1,36 @@
+import { useState, useEffect } from 'react';
+import api from '../services/api';
 import { CloudSun, Droplets, Wind, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export default function WeatherAdvisory({ cityName = 'Hyderabad', cropName = 'Produce' }) {
-  // Deterministic realistic regional weather based on city name hash
-  const hash = cityName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const temp = 27 + (hash % 8);
-  const humidity = 50 + (hash % 30);
-  const windSpeed = 10 + (hash % 12);
-  const isRainRisk = hash % 5 === 0;
+  const [weather, setWeather] = useState(null);
 
-  const isPerishable = ['Tomato', 'Brinjal', 'Potato', 'Vegetables'].some((c) =>
-    cropName.toLowerCase().includes(c.toLowerCase())
-  );
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .get(`/weather?city=${encodeURIComponent(cityName)}`)
+      .then((res) => {
+        if (isMounted && res.data) {
+          setWeather(res.data);
+        }
+      })
+      .catch(() => {
+        // Handled by fallback below
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cityName]);
+
+  // Deterministic realistic regional weather based on city name hash (instant fallback)
+  const hash = cityName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const temp = weather?.temp !== undefined ? weather.temp : 27 + (hash % 8);
+  const humidity = weather?.humidity !== undefined ? weather.humidity : 50 + (hash % 30);
+  const windSpeed = weather?.windSpeed !== undefined ? weather.windSpeed : 10 + (hash % 12);
+  const condition = weather?.condition || 'Clear';
+  const isRainRisk = weather?.isRainRisk !== undefined ? weather.isRainRisk : hash % 5 === 0;
+  const isDemo = weather?.isDemo !== false;
 
   return (
     <div className="bg-gradient-to-r from-blue-50/80 to-emerald-50/80 border border-blue-200/60 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs shadow-sm animate-fade-in">
@@ -20,11 +40,16 @@ export default function WeatherAdvisory({ cityName = 'Hyderabad', cropName = 'Pr
           <CloudSun className="w-5 h-5" />
         </div>
         <div>
-          <div className="font-bold text-gray-800 text-sm">
-            {cityName} Weather & Route Advisory
+          <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+            <span>{cityName} Weather & Route Advisory</span>
+            {isDemo && (
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-1.5 py-0.5 rounded">
+                Estimate
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 text-gray-500 mt-0.5">
-            <span className="font-semibold text-gray-700">{temp}°C Clear</span>
+            <span className="font-semibold text-gray-700">{temp}°C {condition}</span>
             <span>·</span>
             <span className="flex items-center gap-1">
               <Droplets className="w-3 h-3 text-blue-500" /> {humidity}% Humidity

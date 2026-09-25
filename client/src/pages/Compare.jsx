@@ -202,10 +202,12 @@ export default function Compare() {
   // Selected crop details
   const selectedCrop = crops.find((c) => c._id === form.cropId) || { name: 'Crop', category: '' };
 
-  // Calculate potential Grade A arbitrage gain
+  // Calculate potential Grade A arbitrage gain (prioritize backend intelligence)
   const bestResult = results?.results?.[0];
   const gradeArbitrageGain =
-    form.quality !== 'A' && bestResult
+    results?.metadata?.gradeArbitrageGain !== undefined && results?.metadata?.gradeArbitrageGain !== null
+      ? results.metadata.gradeArbitrageGain
+      : form.quality !== 'A' && bestResult
       ? Math.round(bestResult.grossRevenue * (form.quality === 'B' ? 0.17 : 0.42))
       : null;
 

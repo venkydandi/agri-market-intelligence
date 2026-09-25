@@ -2,54 +2,93 @@ const Market = require('../models/Market');
 const Crop = require('../models/Crop');
 const PriceRecord = require('../models/PriceRecord');
 const { haversineDistance } = require('./haversine');
-const { MARKETS, CROPS, BASE_PRICES } = require('./seedHelper');
+const { MARKETS, CROPS, BASE_PRICES, QUALITY_MULTIPLIERS, getDeterministicHistoricalPrice } = require('./seedHelper');
 const { isConnected } = require('../db');
-
-// Vehicle specification defaults
-const VEHICLE_TYPES = {
-  auto:          { name: 'Auto Cargo / 3-Wheeler',   capacityKg: 500,   costPerKm: 6  },
-  small_pickup:  { name: 'Tata Ace / Small Pickup',  capacityKg: 1500,  costPerKm: 8  },
-  medium_truck:  { name: 'Medium Truck (Eicher)',    capacityKg: 5000,  costPerKm: 14 },
-  heavy_truck:   { name: 'Heavy Multi-Axle Truck',   capacityKg: 15000, costPerKm: 22 },
-};
+const {
+  VEHICLE_TYPES,
+  calculateTripsRequired,
+  calculateMarketFinancials,
+  compareCandidateRankings,
+  isValidCandidate,
+  generateRecommendationReason,
+  determinePriceFreshness,
+} = require('./calculationEngine');
 
 const DEFAULT_RADIUS_KM = 250;
-const QUALITY_MULTIPLIERS = { A: 1.0, B: 0.85, C: 0.70 };
 
 /**
- * Fallback in-memory comparison when MongoDB is not active or for instant calculation
+ * Resolves crop identifier to a known crop object.
  */
-function compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm = DEFAULT_RADIUS_KM, vehicleType = 'small_pickup', customRatePerKm, laborCostPerTrip = 0 }) {
-  // Find crop name
-  let cropName = 'Tomato';
-  if (cropId && cropId.startsWith('crop_')) {
-    const idx = parseInt(cropId.replace('crop_', ''), 10) - 1;
-    if (CROPS[idx]) cropName = CROPS[idx].name;
-  } else {
-    const matched = CROPS.find((c) => c.name.toLowerCase() === String(cropId).toLowerCase() || c._id === cropId);
-    if (matched) cropName = matched.name;
+function resolveCrop(cropId) {
+  if (!cropId) return CROPS[0];
+
+  const str = String(cropId).trim();
+  if (str.startsWith('crop_')) {
+    const idx = parseInt(str.replace('crop_', ''), 10) - 1;
+    if (CROPS[idx]) return { ...CROPS[idx], _id: str };
   }
 
-  const basePrices = BASE_PRICES[cropName] || BASE_PRICES.Tomato;
-  const qualityMultiplier = QUALITY_MULTIPLIERS[quality] || 1.0;
+  const matched = CROPS.find(
+    (c) =>
+      c.name.toLowerCase() === str.toLowerCase() ||
+      c._id === str ||
+      (c.aliases && c.aliases.some((a) => a.toLowerCase() === str.toLowerCase()))
+  );
 
-  const vehicle = VEHICLE_TYPES[vehicleType] || VEHICLE_TYPES.small_pickup;
-  const effectiveCostPerKm = customRatePerKm ? Number(customRatePerKm) : vehicle.costPerKm;
-  const vehicleCapacity = vehicle.capacityKg;
+  return matched ? { ...matched, _id: matched._id || str } : { ...CROPS[0], _id: 'crop_1' };
+}
 
-  const allResults = [];
+/**
+ * In-memory candidate evaluation
+ */
+function compareInMemory({
+  cropId,
+  quantity,
+  quality = 'A',
+  lat,
+  lng,
+  radiusKm = DEFAULT_RADIUS_KM,
+  vehicleType = 'small_pickup',
+  customRatePerKm,
+  laborCostPerTrip = 0,
+  loadingCostPerTrip = 0,
+  unloadingCostPerTrip = 0,
+  tollCostPerTrip = 0,
+  otherCost = 0,
+}) {
+  const crop = resolveCrop(cropId);
+  const cropName = crop.name;
+  const validQuality = ['A', 'B', 'C'].includes(quality) ? quality : 'A';
+
+  const candidates = [];
 
   MARKETS.forEach((market, idx) => {
+    // GeoJSON coordinates are [longitude, latitude]
     const [marketLng, marketLat] = market.location.coordinates;
     const distanceKm = haversineDistance(lat, lng, marketLat, marketLng);
 
-    const basePrice = basePrices[idx] || basePrices[idx % basePrices.length] || 20;
-    const pricePerKg = Math.round(basePrice * qualityMultiplier * 100) / 100;
-    const tripsNeeded = Math.ceil(quantity / vehicleCapacity);
-    const transportCost = Math.round(distanceKm * effectiveCostPerKm * tripsNeeded + (tripsNeeded * Number(laborCostPerTrip)));
-    const grossRevenue = Math.round(pricePerKg * quantity);
-    const netReturn = grossRevenue - transportCost;
-    const profitMarginPercent = grossRevenue > 0 ? Math.round((netReturn / grossRevenue) * 100) : 0;
+    // Apply quality multiplier strictly once via deterministic historical generator
+    const pricePerKg = getDeterministicHistoricalPrice(cropName, idx, validQuality, 0);
+
+    if (!pricePerKg || pricePerKg <= 0) {
+      return; // Skip invalid or unsupported markets
+    }
+
+    const financials = calculateMarketFinancials({
+      pricePerKg,
+      quantity,
+      distanceKm,
+      vehicleType,
+      customRatePerKm,
+      laborCostPerTrip,
+      loadingCostPerTrip,
+      unloadingCostPerTrip,
+      tollCostPerTrip,
+      otherCost,
+    });
+
+    const isWithinRadius = distanceKm <= radiusKm;
+    const freshness = determinePriceFreshness(new Date(), true);
 
     const record = {
       market: {
@@ -62,75 +101,199 @@ function compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm = DEFAU
         operatingHours: market.operatingHours,
         coordinates: { lat: marketLat, lng: marketLng },
       },
-      pricePerKg,
-      quality,
+      ...financials,
+      quality: validQuality,
       priceDate: new Date(),
-      distanceKm: Math.round(distanceKm * 10) / 10,
-      tripsNeeded,
-      vehicleType,
-      vehicleName: vehicle.name,
-      transportCost,
-      grossRevenue,
-      netReturn,
-      profitMarginPercent,
+      priceAvailable: true,
+      withinRequestedRadius: isWithinRadius,
+      priceFreshness: freshness.priceFreshness,
+      isDemoData: freshness.isDemoData,
+      source: freshness.source,
+      priceAgeHours: freshness.priceAgeHours,
     };
 
-    allResults.push(record);
+    if (isValidCandidate(record)) {
+      candidates.push(record);
+    }
   });
 
-  // Filter by radius
-  let filtered = allResults.filter((r) => r.distanceKm <= radiusKm);
+  // Radius filtering
+  let validCandidates = candidates.filter((c) => c.distanceKm <= radiusKm);
+  let withinRequestedRadius = true;
 
-  // If none within radius, return top 3 nearest
-  if (filtered.length === 0) {
-    filtered = [...allResults].sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 3);
+  if (validCandidates.length === 0) {
+    // Graceful fallback to nearest markets outside radius, explicitly flagged
+    withinRequestedRadius = false;
+    validCandidates = [...candidates].sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 3);
+    validCandidates.forEach((c) => {
+      c.withinRequestedRadius = false;
+    });
   }
 
-  filtered.sort((a, b) => b.netReturn - a.netReturn);
-  return filtered.map((r, i) => ({ ...r, rank: i + 1 }));
+  // Sort candidates by deterministic ranking
+  validCandidates.sort(compareCandidateRankings);
+
+  // Assign ranks and dynamic recommendation reasons
+  const ranked = validCandidates.map((r, i) => {
+    const rankedRecord = { ...r, rank: i + 1 };
+    rankedRecord.recommendationReason = generateRecommendationReason(rankedRecord, validCandidates);
+    return rankedRecord;
+  });
+
+  // Calculate potential Grade A arbitrage gain if user queried Grade B or C
+  let gradeArbitrageGain = null;
+  if (validQuality !== 'A' && ranked.length > 0) {
+    const topMarketIdx = MARKETS.findIndex((m) => m.name === ranked[0].market.name);
+    const gradeAPrice = getDeterministicHistoricalPrice(cropName, topMarketIdx >= 0 ? topMarketIdx : 0, 'A', 0);
+    const gradeAFinancials = calculateMarketFinancials({
+      pricePerKg: gradeAPrice,
+      quantity,
+      distanceKm: ranked[0].distanceKm,
+      vehicleType,
+      customRatePerKm,
+      laborCostPerTrip,
+      loadingCostPerTrip,
+      unloadingCostPerTrip,
+      tollCostPerTrip,
+      otherCost,
+    });
+    gradeArbitrageGain = Math.max(0, gradeAFinancials.netReturn - ranked[0].netReturn);
+  }
+
+  return {
+    results: ranked,
+    total: ranked.length,
+    metadata: {
+      withinRequestedRadius,
+      searchRadiusKm: radiusKm,
+      cropName,
+      quality: validQuality,
+      quantity,
+      gradeArbitrageGain,
+      isDemoData: true,
+      mode: 'standalone_memory',
+    },
+  };
 }
 
 /**
- * Core market comparison algorithm with automatic DB / memory switching
+ * Database comparison using MongoDB collections with automatic fallback
  */
-async function compareMarkets({ cropId, quantity, quality, lat, lng, radiusKm = DEFAULT_RADIUS_KM, vehicleType = 'small_pickup', customRatePerKm, laborCostPerTrip = 0 }) {
+async function compareMarkets({
+  cropId,
+  quantity,
+  quality = 'A',
+  lat,
+  lng,
+  radiusKm = DEFAULT_RADIUS_KM,
+  vehicleType = 'small_pickup',
+  customRatePerKm,
+  laborCostPerTrip = 0,
+  loadingCostPerTrip = 0,
+  unloadingCostPerTrip = 0,
+  tollCostPerTrip = 0,
+  otherCost = 0,
+}) {
+  const qty = Number(quantity);
+  const userLat = Number(lat);
+  const userLng = Number(lng);
+  const userRadius = Number(radiusKm) || DEFAULT_RADIUS_KM;
+  const validQuality = ['A', 'B', 'C'].includes(quality) ? quality : 'A';
+
   if (!isConnected()) {
-    return compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm, vehicleType, customRatePerKm, laborCostPerTrip });
+    return compareInMemory({
+      cropId,
+      quantity: qty,
+      quality: validQuality,
+      lat: userLat,
+      lng: userLng,
+      radiusKm: userRadius,
+      vehicleType,
+      customRatePerKm,
+      laborCostPerTrip,
+      loadingCostPerTrip,
+      unloadingCostPerTrip,
+      tollCostPerTrip,
+      otherCost,
+    });
   }
 
   try {
+    // GeoJSON point: [longitude, latitude]
     const nearbyMarkets = await Market.find({
       location: {
         $nearSphere: {
           $geometry: {
             type: 'Point',
-            coordinates: [lng, lat],
+            coordinates: [userLng, userLat],
           },
-          $maxDistance: radiusKm * 1000,
+          $maxDistance: userRadius * 1000,
         },
       },
       isActive: true,
-    }).populate('supportedCrops', 'name');
+    }).populate('supportedCrops', 'name category');
 
-    if (nearbyMarkets.length === 0) {
-      return compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm, vehicleType, customRatePerKm, laborCostPerTrip });
+    if (!nearbyMarkets || nearbyMarkets.length === 0) {
+      return compareInMemory({
+        cropId,
+        quantity: qty,
+        quality: validQuality,
+        lat: userLat,
+        lng: userLng,
+        radiusKm: userRadius,
+        vehicleType,
+        customRatePerKm,
+        laborCostPerTrip,
+        loadingCostPerTrip,
+        unloadingCostPerTrip,
+        tollCostPerTrip,
+        otherCost,
+      });
     }
 
     const marketIds = nearbyMarkets.map((m) => m._id);
 
     let cropObjectId;
+    let cropDoc = null;
     try {
-      cropObjectId = new (require('mongoose').Types.ObjectId)(cropId);
+      if (require('mongoose').Types.ObjectId.isValid(cropId)) {
+        cropObjectId = new (require('mongoose').Types.ObjectId)(cropId);
+        cropDoc = await Crop.findById(cropObjectId);
+      } else {
+        const resolved = resolveCrop(cropId);
+        cropDoc = await Crop.findOne({ name: resolved.name });
+        if (cropDoc) cropObjectId = cropDoc._id;
+      }
     } catch {
-      return compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm, vehicleType, customRatePerKm, laborCostPerTrip });
+      // Fallback
     }
 
+    if (!cropObjectId) {
+      return compareInMemory({
+        cropId,
+        quantity: qty,
+        quality: validQuality,
+        lat: userLat,
+        lng: userLng,
+        radiusKm: userRadius,
+        vehicleType,
+        customRatePerKm,
+        laborCostPerTrip,
+        loadingCostPerTrip,
+        unloadingCostPerTrip,
+        tollCostPerTrip,
+        otherCost,
+      });
+    }
+
+    // Fetch latest price records per market for this crop and quality
+    // Note: prices in DB are already quality-specific, so quality multiplier is NOT applied again
     const latestPrices = await PriceRecord.aggregate([
       {
         $match: {
           market: { $in: marketIds },
           crop: cropObjectId,
-          quality,
+          quality: validQuality,
         },
       },
       { $sort: { date: -1 } },
@@ -140,12 +303,28 @@ async function compareMarkets({ cropId, quantity, quality, lat, lng, radiusKm = 
           pricePerUnit: { $first: '$pricePerUnit' },
           date: { $first: '$date' },
           quality: { $first: '$quality' },
+          source: { $first: '$source' },
+          isDemoData: { $first: '$isDemoData' },
         },
       },
     ]);
 
-    if (latestPrices.length === 0) {
-      return compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm, vehicleType, customRatePerKm, laborCostPerTrip });
+    if (!latestPrices || latestPrices.length === 0) {
+      return compareInMemory({
+        cropId,
+        quantity: qty,
+        quality: validQuality,
+        lat: userLat,
+        lng: userLng,
+        radiusKm: userRadius,
+        vehicleType,
+        customRatePerKm,
+        laborCostPerTrip,
+        loadingCostPerTrip,
+        unloadingCostPerTrip,
+        tollCostPerTrip,
+        otherCost,
+      });
     }
 
     const priceMap = {};
@@ -153,28 +332,37 @@ async function compareMarkets({ cropId, quantity, quality, lat, lng, radiusKm = 
       priceMap[p._id.toString()] = p;
     });
 
-    const vehicle = VEHICLE_TYPES[vehicleType] || VEHICLE_TYPES.small_pickup;
-    const effectiveCostPerKm = customRatePerKm ? Number(customRatePerKm) : vehicle.costPerKm;
-    const vehicleCapacity = vehicle.capacityKg;
-
-    const results = [];
+    const candidates = [];
 
     for (const market of nearbyMarkets) {
       const priceRecord = priceMap[market._id.toString()];
-      if (!priceRecord) continue;
+      if (!priceRecord || !priceRecord.pricePerUnit || priceRecord.pricePerUnit <= 0) {
+        continue; // Exclude markets without valid price
+      }
 
+      // GeoJSON [lng, lat]
       const [marketLng, marketLat] = market.location.coordinates;
-      const distanceKm = haversineDistance(lat, lng, marketLat, marketLng);
+      const distanceKm = haversineDistance(userLat, userLng, marketLat, marketLng);
 
-      const tripsNeeded = Math.ceil(quantity / vehicleCapacity);
-      const transportCost = Math.round(distanceKm * effectiveCostPerKm * tripsNeeded + (tripsNeeded * Number(laborCostPerTrip)));
-      const grossRevenue = Math.round(priceRecord.pricePerUnit * quantity);
-      const netReturn = grossRevenue - transportCost;
-      const profitMarginPercent = grossRevenue > 0 ? Math.round((netReturn / grossRevenue) * 100) : 0;
+      const financials = calculateMarketFinancials({
+        pricePerKg: priceRecord.pricePerUnit,
+        quantity: qty,
+        distanceKm,
+        vehicleType,
+        customRatePerKm,
+        laborCostPerTrip,
+        loadingCostPerTrip,
+        unloadingCostPerTrip,
+        tollCostPerTrip,
+        otherCost,
+      });
 
-      results.push({
+      const freshness = determinePriceFreshness(priceRecord.date, priceRecord.isDemoData || priceRecord.source === 'seed');
+      const isWithinRadius = distanceKm <= userRadius;
+
+      const record = {
         market: {
-          _id: market._id,
+          _id: market._id.toString(),
           name: market.name,
           address: market.address,
           district: market.district,
@@ -183,27 +371,85 @@ async function compareMarkets({ cropId, quantity, quality, lat, lng, radiusKm = 
           operatingHours: market.operatingHours,
           coordinates: { lat: marketLat, lng: marketLng },
         },
-        pricePerKg: priceRecord.pricePerUnit,
-        quality: priceRecord.quality,
+        ...financials,
+        quality: validQuality,
         priceDate: priceRecord.date,
-        distanceKm: Math.round(distanceKm * 10) / 10,
-        tripsNeeded,
+        priceAvailable: true,
+        withinRequestedRadius: isWithinRadius,
+        priceFreshness: freshness.priceFreshness,
+        isDemoData: freshness.isDemoData,
+        source: freshness.source,
+        priceAgeHours: freshness.priceAgeHours,
+      };
+
+      if (isValidCandidate(record)) {
+        candidates.push(record);
+      }
+    }
+
+    if (candidates.length === 0) {
+      return compareInMemory({
+        cropId,
+        quantity: qty,
+        quality: validQuality,
+        lat: userLat,
+        lng: userLng,
+        radiusKm: userRadius,
         vehicleType,
-        vehicleName: vehicle.name,
-        transportCost,
-        grossRevenue,
-        netReturn,
-        profitMarginPercent,
+        customRatePerKm,
+        laborCostPerTrip,
+        loadingCostPerTrip,
+        unloadingCostPerTrip,
+        tollCostPerTrip,
+        otherCost,
       });
     }
 
-    results.sort((a, b) => b.netReturn - a.netReturn);
-    return results.map((r, i) => ({ ...r, rank: i + 1 }));
+    candidates.sort(compareCandidateRankings);
+
+    const ranked = candidates.map((r, i) => {
+      const rankedRecord = { ...r, rank: i + 1 };
+      rankedRecord.recommendationReason = generateRecommendationReason(rankedRecord, candidates);
+      return rankedRecord;
+    });
+
+    return {
+      results: ranked,
+      total: ranked.length,
+      metadata: {
+        withinRequestedRadius: true,
+        searchRadiusKm: userRadius,
+        cropName: cropDoc?.name || 'Crop',
+        quality: validQuality,
+        quantity: qty,
+        isDemoData: ranked.some((r) => r.isDemoData),
+        mode: 'database',
+      },
+    };
   } catch (err) {
     console.warn('⚠️ Compare DB error, falling back to memory algorithm:', err.message);
-    return compareInMemory({ cropId, quantity, quality, lat, lng, radiusKm, vehicleType, customRatePerKm, laborCostPerTrip });
+    return compareInMemory({
+      cropId,
+      quantity: qty,
+      quality: validQuality,
+      lat: userLat,
+      lng: userLng,
+      radiusKm: userRadius,
+      vehicleType,
+      customRatePerKm,
+      laborCostPerTrip,
+      loadingCostPerTrip,
+      unloadingCostPerTrip,
+      tollCostPerTrip,
+      otherCost,
+    });
   }
 }
 
-module.exports = { compareMarkets, VEHICLE_TYPES };
-
+module.exports = {
+  compareMarkets,
+  compareInMemory,
+  resolveCrop,
+  VEHICLE_TYPES,
+  QUALITY_MULTIPLIERS,
+};
